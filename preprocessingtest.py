@@ -38,7 +38,7 @@ for item in s:
     h = np.asarray(humans)
     imgstring = tf.gfile.FastGFile(imgpath,'rb').read()
     boxs, image = isess.run([bbox,image_pre],feed_dict={image_file:imgstring, in_humans:h, in_keypoints:k})
-    image = ((image/2+0.5))
+    #image = ((image/2+0.5))
     print(boxs)
     plt.imshow(image[0])
     plt.show()

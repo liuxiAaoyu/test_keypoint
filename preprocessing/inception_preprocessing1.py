@@ -196,7 +196,10 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
     tk = keypoints
     tk_last = tf.strided_slice(tk,[0,0,2],[3,14,3],[1,1,3])
     last_ones = tf.ones([3])
-    tk_last_full = tk_last*last_ones
+    if 1:
+      tk_last_full = tk_last*last_ones
+    else:
+      tk_last_full = tk_last*last_ones*2
     tk_ones = tf.ones(tf.shape(tk))
     mask = tf.greater(tk_last_full,tk_ones)
     tk_zeros = tf.zeros(tf.shape(tk))
@@ -248,7 +251,7 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
     tk_clamp = tk_clamp / box_ref
 
     draw_keypoints_module = tf.load_op_library('./draw_keypoints.so')
-    image_with_distorted_keypoints = draw_keypoints_module.draw_keypoints( distorted_image, tf.expand_dims(tk_clamp, 0))
+    image_with_distorted_keypoints = draw_keypoints_module.draw_keypoints( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
   
     return distorted_bbox, image_with_distorted_keypoints
     # This resizing operation may distort the images because the aspect

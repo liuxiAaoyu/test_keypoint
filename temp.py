@@ -22,13 +22,17 @@ isess.run(tf.global_variables_initializer())
 
 f = open('/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_annotations_20170911.json','r')
 s = json.load(f)
-item = s[3]
+item = s[1]
 imgpath = '/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_images_20170911/'+item['image_id']+'.jpg'
 humans = []
-for key, value in item['human_annotations'].items():
+tl=list(item['human_annotations'].items())
+tl.sort()
+for key, value in tl:
     humans.append([value[1],value[0],value[3],value[2]])
 keypoints  = []
-for key, value in item['keypoint_annotations'].items():
+tl=list(item['keypoint_annotations'].items())
+tl.sort()
+for key, value in tl:
     temppoints = []
     for i in range(14):
         temppoints.append([value[i*3], value[i*3+1], value[i*3+2]])
@@ -41,20 +45,21 @@ th = tf.constant(h,dtype=tf.float32)
 
 imgstring = tf.gfile.FastGFile(imgpath,'rb').read()
 image = cv2.imread(imgpath)
-imagei = tf.constant(image,dtype=tf.float32)
-imagei = imagei/255
 
 hh = tf.shape(img_input)[0]
 ww = tf.shape(img_input)[1]
 sh = tf.stack([hh,ww,hh,ww])
 sh = tf.cast(sh,dtype=tf.float32)
 bbox = th/sh
+th = bbox
 bbox = tf.expand_dims(bbox,0)
-
 
 tk_last = tf.strided_slice(tk,[0,0,2],[3,14,3],[1,1,3])
 last_ones = tf.ones([3])
-tk_last_full = tk_last*last_ones
+if 1:
+  tk_last_full = tk_last*last_ones
+else:
+  tk_last_full = tk_last*last_ones*2
 tk_ones = tf.ones(tf.shape(tk))
 mask = tf.greater(tk_last_full,tk_ones)
 tk_zeros = tf.zeros(tf.shape(tk))
@@ -62,13 +67,13 @@ tk_1 = tf.where(mask,tk_zeros,tk)
 sh = tf.stack([ww-1, hh-1, 1])
 sh = tf.cast(sh,dtype=tf.float32)
 tk = tk_1/sh
-
+imagei = tf.image.convert_image_dtype(img_input, dtype=tf.float32)
 sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box(
         tf.shape(imagei),
         bounding_boxes=bbox,
-        min_object_covered=0.2,
+        min_object_covered=0.8,
         aspect_ratio_range=(0.8,1.2),
-        area_range=(0.1,1.0),
+        area_range=(0.2,1.0),
         max_attempts=100,
         use_image_if_no_bounding_boxes=True)
 bbox_begin, bbox_size, distort_bbox = sample_distorted_bounding_box
@@ -77,9 +82,7 @@ image_with_distorted_box = tf.image.draw_bounding_boxes(
 cropped_image = tf.slice(imagei, bbox_begin, bbox_size)
 
 distort_bbox = distort_bbox[0,0]
-print(isess.run(bbox,feed_dict={image_file:imgstring}))
-print(isess.run(distort_bbox,feed_dict={image_file:imgstring}))
-print(isess.run(bbox-distort_bbox,feed_dict={image_file:imgstring}))
+
 pad=tf.constant([[0,1]])
 tf.pad(distort_bbox,pad)
 #print(isess.run(tk,feed_dict={image_file:imgstring}))
@@ -115,16 +118,36 @@ tk_clamp = tk_clamp / box_ref
 #print(isess.run(tk_clamp,feed_dict={image_file:imgstring}))
 drawed_croped = draw_keypoints_module.draw_keypoints( tf.expand_dims(cropped_image, 0), tf.expand_dims(tk_clamp, 0))
 
+humans_ymin, humans_xmin, humans_ymax, humans_xmax = tf.split(th, [1, 1, 1, 1], axis=1)
+area_human = (humans_ymax - humans_ymin)*(humans_xmax - humans_xmin)#tf.multiply(tf.subtract(humans_ymax, humans_ymin), tf.subtract(humans_xmax, humans_xmin))
+area_factor = area_human / ((distort_bbox[3] - distort_bbox[1]) * (distort_bbox[2] - distort_bbox[0]))
 
-showimg, show_crop, show_tk = isess.run([drawed, drawed_croped, tk_clamp],feed_dict={image_file:imgstring})
-plt.imshow(showimg[0])
+print(isess.run([area_factor, ((distort_bbox[3] - distort_bbox[1]) * (distort_bbox[2] - distort_bbox[0])), th], feed_dict={image_file:imgstring}))
+
+
+put_gaussian_maps_module = tf.load_op_library('./put_gaussian_maps.so')
+gaussion_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(cropped_image, 0), tf.expand_dims(tk_clamp, 0))
+
+put_vec_maps_module = tf.load_op_library('./put_vec_maps.so')
+vec_maps = put_vec_maps_module.put_vec_maps( tf.expand_dims(cropped_image, 0), tf.expand_dims(tk_clamp, 0), tf.expand_dims(area_factor, 0))
+
+show_gaussion_maps, show_vec_maps, show_cropped = isess.run([gaussion_maps, vec_maps, drawed_croped], feed_dict={image_file:imgstring})
+
+ttt = np.zeros(show_vec_maps[0][:,:,0].shape)
+for i in range(14):
+ ttt = ttt + show_vec_maps[0][:,:,i*2]
+plt.imshow(show_cropped[0])
+plt.imshow(ttt,alpha = .6)
 plt.show()
-print(show_tk)
-plt.imshow(show_crop[0])
+
+plt.imshow(ttt)
 plt.show()
-
-
-
+# for i in range(14):
+#  plt.imshow(show_cropped[0])
+#  plt.imshow(show_vec_maps[0][:,:,i*2], alpha=.5)
+#  plt.show()
+#  plt.imshow(show_vec_maps[0][:,:,i*2], alpha=.5)
+#  plt.show()
 
 
 

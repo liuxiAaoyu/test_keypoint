@@ -20,10 +20,10 @@ isess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=
 
 isess.run(tf.global_variables_initializer())
 
-f = open('/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_annotations_20170911.json','r')
+f = open('/media/xiaoyu/Document/data/ai_challenger_keypoint_train_20170909/keypoint_train_annotations_20170909.json','r')
 s = json.load(f)
 item = s[1]
-imgpath = '/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_images_20170911/'+item['image_id']+'.jpg'
+imgpath = '/media/xiaoyu/Document/data/ai_challenger_keypoint_train_20170909/keypoint_train_images_20170902/'+item['image_id']+'.jpg'
 humans = []
 tl=list(item['human_annotations'].items())
 tl.sort()
@@ -48,7 +48,7 @@ image = cv2.imread(imgpath)
 
 hh = tf.shape(img_input)[0]
 ww = tf.shape(img_input)[1]
-sh = tf.stack([hh,ww,hh,ww])
+sh = tf.stack([hh-1, ww-1, hh-1, ww-1])
 sh = tf.cast(sh,dtype=tf.float32)
 bbox = th/sh
 th = bbox

@@ -100,7 +100,7 @@ def distorted_bounding_box_crop(image,
                                 bbox,
                                 min_object_covered=0.6,
                                 aspect_ratio_range=(0.75, 1.33),
-                                area_range=(0.05, 1.0),
+                                area_range=(0.65, 1.0),
                                 max_attempts=100,
                                 scope=None):
   """Generates cropped_image using a one of the bboxes randomly distorted.
@@ -189,12 +189,12 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
                          shape=[1, 1, 4])
     hh = tf.shape(image)[0]
     ww = tf.shape(image)[1]
-    sh = tf.stack([hh, ww, hh, ww])
+    sh = tf.stack([hh-1, ww-1, hh-1, ww-1])
     sh = tf.cast(sh,dtype=tf.float32)
     th = hunmans/sh
 
     tk = keypoints
-    tk_last = tf.strided_slice(tk,[0,0,2],[3,14,3],[1,1,3])
+    tk_last = tf.strided_slice(tk,[0,0,2],[9999,14,3],[1,1,3])
     last_ones = tf.ones([3])
     if 1:
       tk_last_full = tk_last*last_ones
@@ -252,8 +252,18 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
 
     draw_keypoints_module = tf.load_op_library('./draw_keypoints.so')
     image_with_distorted_keypoints = draw_keypoints_module.draw_keypoints( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
-  
-    return distorted_bbox, image_with_distorted_keypoints
+
+    humans_ymin, humans_xmin, humans_ymax, humans_xmax = tf.split(th, [1, 1, 1, 1], axis=1)
+    area_human = (humans_ymax - humans_ymin)*(humans_xmax - humans_xmin)#tf.multiply(tf.subtract(humans_ymax, humans_ymin), tf.subtract(humans_xmax, humans_xmin))
+    area_factor = area_human / ((distort_bbox[3] - distort_bbox[1]) * (distort_bbox[2] - distort_bbox[0]))
+
+    
+    put_gaussian_maps_module = tf.load_op_library('./put_gaussian_maps.so')
+    gaussion_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
+
+    put_vec_maps_module = tf.load_op_library('./put_vec_maps.so')
+    vec_maps = put_vec_maps_module.put_vec_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0), tf.expand_dims(area_factor, 0))
+    return distorted_bbox, image_with_distorted_keypoints, gaussion_maps, vec_maps
     # This resizing operation may distort the images because the aspect
     # ratio is not respected. We select a resize method in a round robin
     # fashion based on the thread number.

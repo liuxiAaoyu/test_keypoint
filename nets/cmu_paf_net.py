@@ -155,6 +155,9 @@ def cal_loss(gaussian_out, vec_out, gaussian_label, vec_label):
     for i in range(1, 7):
         loss += eula_loss(gaussian_out[i], gaussian_label, i, 1)
         loss += eula_loss(gaussian_out[i], gaussian_label, i, 2)
+    
+
+    tf.losses.add_loss(loss)
     with tf.variable_scope(scope, 'total'):
         tf.add_to_collection('LOSSES', loss)
     return loss

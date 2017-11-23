@@ -260,42 +260,46 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
     
     put_gaussian_maps_module = tf.load_op_library('./put_gaussian_maps.so')
     gaussion_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
+    gaussion_maps = tf.squeeze(gaussion_maps,0)
 
     put_vec_maps_module = tf.load_op_library('./put_vec_maps.so')
     vec_maps = put_vec_maps_module.put_vec_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0), tf.expand_dims(area_factor, 0))
-    return distorted_bbox, image_with_distorted_keypoints, gaussion_maps, vec_maps
+    vec_maps = tf.squeeze(vec_maps,0)
     # This resizing operation may distort the images because the aspect
     # ratio is not respected. We select a resize method in a round robin
     # fashion based on the thread number.
     # Note that ResizeMethod contains 4 enumerated resizing methods.
 
-    # # We select only 1 case for fast_mode bilinear.
-    # num_resize_cases = 1 if fast_mode else 4
-    # distorted_image = apply_with_random_selector(
-    #     distorted_image,
-    #     lambda x, method: tf.image.resize_images(x, [height, width], method),
-    #     num_cases=num_resize_cases)
+    # We select only 1 case for fast_mode bilinear.
+    num_resize_cases = 1 if fast_mode else 4
+    distorted_image = apply_with_random_selector(
+        distorted_image,
+        lambda x, method: tf.image.resize_images(x, [height, width], method),
+        num_cases=num_resize_cases)
 
-    # if add_image_summaries:
-    #   tf.summary.image('cropped_resized_image',
-    #                    tf.expand_dims(distorted_image, 0))
+    gaussion_maps = tf.image.resize_images(gaussion_maps, [height, width], 2)
+    vec_maps = tf.image.resize_images(vec_maps, [height, width], 2)
 
-    # # Randomly flip the image horizontally.
-    # distorted_image = tf.image.random_flip_left_right(distorted_image)
+    if add_image_summaries:
+      tf.summary.image('cropped_resized_image',
+                       tf.expand_dims(distorted_image, 0))
 
-    # # Randomly distort the colors. There are 4 ways to do it.
-    # distorted_image = apply_with_random_selector(
-    #     distorted_image,
-    #     lambda x, ordering: distort_color(x, ordering, fast_mode),
-    #     num_cases=4)
+    # Randomly flip the image horizontally.
+    #distorted_image = tf.image.random_flip_left_right(distorted_image)
 
-    # if add_image_summaries:
-    #   tf.summary.image('final_distorted_image',
-    #                    tf.expand_dims(distorted_image, 0))
-    # distorted_image = tf.subtract(distorted_image, 0.5)
-    # distorted_image = tf.multiply(distorted_image, 2.0)
-    # return distorted_bbox, distorted_image
+    # Randomly distort the colors. There are 4 ways to do it.
+    distorted_image = apply_with_random_selector(
+        distorted_image,
+        lambda x, ordering: distort_color(x, ordering, fast_mode),
+        num_cases=4)
 
+    if add_image_summaries:
+      tf.summary.image('final_distorted_image',
+                       tf.expand_dims(distorted_image, 0))
+    distorted_image = tf.subtract(distorted_image, 0.5)
+    distorted_image = tf.multiply(distorted_image, 2.0)
+
+    return distorted_image, gaussion_maps, vec_maps
 
 
 def preprocess_for_train(image, height, width, bbox,
@@ -458,7 +462,7 @@ def preprocess_image(image, height, width,
     ValueError: if user does not provide bounding box
   """
   if is_training:
-    return preprocess_for_train(image, height, width, hunmans, keypoints, bbox, fast_mode,
+    return preprocess_for_train2(image, height, width, hunmans, keypoints, bbox, fast_mode,
                                 add_image_summaries=add_image_summaries)
   else:
     return preprocess_for_eval(image, height, width)

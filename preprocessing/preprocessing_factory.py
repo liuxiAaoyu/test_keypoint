@@ -24,10 +24,22 @@ from preprocessing import cifarnet_preprocessing
 from preprocessing import inception_preprocessing
 from preprocessing import lenet_preprocessing
 from preprocessing import vgg_preprocessing
-from preprocessing import inception_preprocessing1
+from preprocessing import cmu_paf_preprocessing
 
 slim = tf.contrib.slim
 
+def get_cmu_paf_preprocessing(name, is_training=False):
+  preprocessing_fn_map = {
+      'cmu_paf': cmu_paf_preprocessing,
+  }
+  if name not in preprocessing_fn_map:
+    raise ValueError('Preprocessing name [%s] was not recognized' % name)
+
+  def preprocessing_fn(image, output_height, output_width, hunmans, keypoints, **kwargs):
+    return preprocessing_fn_map[name].preprocess_image(
+        image, output_height, output_width, hunmans, keypoints, is_training=is_training, **kwargs)
+
+  return preprocessing_fn
 
 def get_preprocessing(name, is_training=False):
   """Returns preprocessing_fn(image, height, width, **kwargs).
@@ -69,7 +81,7 @@ def get_preprocessing(name, is_training=False):
       'vgg_a': vgg_preprocessing,
       'vgg_16': vgg_preprocessing,
       'vgg_19': vgg_preprocessing,
-      'my_pre': inception_preprocessing1,
+      'cmu_paf': cmu_paf_preprocessing,
   }
 
   if name not in preprocessing_fn_map:

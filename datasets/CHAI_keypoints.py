@@ -7,7 +7,7 @@ slim = tf.contrib.slim
 
 _FILE_PATTERN = 'CHAI_%s.tfrecord'
 
-SPLITS_TO_SIZES = {'train4592': 4592, 'valid496': 496, 'train5088': 5088}
+SPLITS_TO_SIZES = {'train': 29994, 'valid4': 29994}
 
 _NUM_CLASSES = 2
 

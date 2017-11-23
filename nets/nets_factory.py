@@ -31,6 +31,7 @@ from nets import resnet_v1
 from nets import resnet_v2
 from nets import vgg
 from nets.nasnet import nasnet
+from nets import cmu_paf_net
 
 slim = tf.contrib.slim
 
@@ -61,6 +62,7 @@ networks_map = {'alexnet_v2': alexnet.alexnet_v2,
                 'nasnet_cifar': nasnet.build_nasnet_cifar,
                 'nasnet_mobile': nasnet.build_nasnet_mobile,
                 'nasnet_large': nasnet.build_nasnet_large,
+                'cmu_paf_net': cmu_paf_net.paf_net,
                }
 
 arg_scopes_map = {'alexnet_v2': alexnet.alexnet_v2_arg_scope,
@@ -91,7 +93,29 @@ arg_scopes_map = {'alexnet_v2': alexnet.alexnet_v2_arg_scope,
                   'nasnet_cifar': nasnet.nasnet_cifar_arg_scope,
                   'nasnet_mobile': nasnet.nasnet_mobile_arg_scope,
                   'nasnet_large': nasnet.nasnet_large_arg_scope,
+                  'cmu_paf_net': cmu_paf_net.my_arg_scpoe,
                  }
+
+networks_obj = {'cmu_paf_net': cmu_paf_net.paf_net,
+                }
+
+
+def get_network(name, weight_decay=0.0, is_training=False):
+    """Get a network object from a name.
+    """
+    # params = networks_obj[name].default_params if params is None else params
+    if name not in networks_obj:
+      raise ValueError('Name of network unknown %s' % name)
+    func = networks_obj[name]
+    @functools.wraps(func)
+    def network_fn(images, **kwargs):
+      arg_scope = arg_scopes_map[name](weight_decay=weight_decay)
+      with slim.arg_scope(arg_scope):
+        return func(images, is_training=is_training, **kwargs)
+    if hasattr(func, 'default_image_size'):
+      network_fn.default_image_size = func.default_image_size
+
+    return network_fn
 
 
 def get_network_fn(name, num_classes, weight_decay=0.0, is_training=False):

@@ -428,6 +428,7 @@ def preprocess_for_eval(image, height, width,
 
 
 def preprocess_image(image, height, width,
+                     hunmans, keypoints,
                      is_training=False,
                      bbox=None,
                      fast_mode=True,
@@ -457,7 +458,7 @@ def preprocess_image(image, height, width,
     ValueError: if user does not provide bounding box
   """
   if is_training:
-    return preprocess_for_train(image, height, width, bbox, fast_mode,
+    return preprocess_for_train(image, height, width, hunmans, keypoints, bbox, fast_mode,
                                 add_image_summaries=add_image_summaries)
   else:
     return preprocess_for_eval(image, height, width)

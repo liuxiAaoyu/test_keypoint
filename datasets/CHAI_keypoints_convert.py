@@ -1,6 +1,5 @@
 import tensorflow as tf
 import numpy as np
-from PIL import Image
 import glob
 import os
 import random
@@ -9,8 +8,8 @@ import matplotlib.pyplot as plt
 import json
 import os
 
-DATA_PATH = '/media/xiaoyu/Document/data/'
-DATA_PATH = '/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/'
+DATA_PATH = '/media/xiaoyu/Document/data/ai_challenger_keypoint_train_20170909/'
+#DATA_PATH = '/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/'
 #/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_annotations_20170911.json
 #/home/xiaoyu/Documents/data/ai_challenger_keypoint_train_20170909/keypoint_train_annotations_20170909.json
 def process_data(image, humans, keypoints, tfrecord_write):
@@ -27,13 +26,13 @@ def process_data(image, humans, keypoints, tfrecord_write):
     ))
     tfrecord_write.write(example.SerializeToString())
 
-f = open(DATA_PATH+'keypoint_validation_annotations_20170911 (copy).json','r')
+f = open(DATA_PATH+'keypoint_train_annotations_20170909.json','r')
 s = json.load(f)
 count=0
 with tf.Session() as sess:
-    with tf.python_io.TFRecordWriter(DATA_PATH+'/train.tfrecord') as tfrecord_writer:
+    with tf.python_io.TFRecordWriter('/home/xiaoyu/Documents/data/train.tfrecord') as tfrecord_writer:
         for item in s:
-            imgpath = DATA_PATH+'keypoint_validation_images_20170911/'+item['image_id']+'.jpg'
+            imgpath = DATA_PATH+'keypoint_train_images_20170902/'+item['image_id']+'.jpg'
             if os.path.exists(imgpath) == False:
                 continue
             humans = []

@@ -5,9 +5,9 @@ from datasets import dataset_utils
 
 slim = tf.contrib.slim
 
-_FILE_PATTERN = 'CHAI_%s.tfrecord'
+_FILE_PATTERN = 'CHAIkp_%s.tfrecord'
 
-SPLITS_TO_SIZES = {'train': 29994, 'valid4': 29994}
+SPLITS_TO_SIZES = {'train': 209866, 'valid4': 29994}
 
 _NUM_CLASSES = 2
 

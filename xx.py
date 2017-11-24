@@ -147,7 +147,7 @@ tf.app.flags.DEFINE_string(
     'Specifies how the learning rate is decayed. One of "fixed", "exponential",'
     ' or "polynomial"')
 
-tf.app.flags.DEFINE_float('learning_rate', 0.001, 'Initial learning rate.')
+tf.app.flags.DEFINE_float('learning_rate', 0.0001, 'Initial learning rate.')
 
 tf.app.flags.DEFINE_float(
     'end_learning_rate', 0.0001,
@@ -311,13 +311,28 @@ def main(_):
     def clone_fn(batch_queue):
       """Allows data parallelism by creating multiple clones of network_fn."""
       images, gaussian_labels, vec_labels = batch_queue.dequeue()
-      logits, end_points = network_fn(images)
+      gaussian_out, vec_out= network_fn(images)
 
       #############################
       # Specify the loss function #
       #############################
+      def cal_loss(gaussian_out, vec_out, gaussian_label, vec_label):
+        def eula_loss(x, y, stage, branch):
+            name = "stage%d_L%d" % (stage, branch)
+            with tf.variable_scope(name):
+              return tf.reduce_sum((x-y)*(x-y) / 2)
+        loss = 0
+        for i in range(1, 7):
+            lossB1 = eula_loss(gaussian_out[i-1], gaussian_label, i, 1)
+            lossB2 = eula_loss(vec_out[i-1], vec_label, i, 2)
+            tf.losses.add_loss(lossB1)
+            tf.losses.add_loss(lossB2)
+            loss +=  lossB1
+            loss +=  lossB2
+        return loss
 
-      return end_points
+      loss = cal_loss(gaussian_out, vec_out, gaussian_labels, vec_labels)
+      return loss
 
     # Gather initial summaries.
     summaries = set(tf.get_collection(tf.GraphKeys.SUMMARIES))
@@ -330,12 +345,12 @@ def main(_):
 
     # Add summaries for end_points.
     #### end_points is the output of clone_fn()
-    end_points = clones[0].outputs
-    for end_point in end_points:
-      x = end_points[end_point]
-      summaries.add(tf.summary.histogram('activations/' + end_point, x))
-      summaries.add(tf.summary.scalar('sparsity/' + end_point,
-                                      tf.nn.zero_fraction(x)))
+    # end_points = clones[0].outputs
+    # for end_point in end_points:
+    #   x = end_points[end_point]
+    #   summaries.add(tf.summary.histogram('activations/' + end_point, x))
+    #   summaries.add(tf.summary.scalar('sparsity/' + end_point,
+    #                                   tf.nn.zero_fraction(x)))
 
     # Add summaries for losses.
     for loss in tf.get_collection(tf.GraphKeys.LOSSES, first_clone_scope):

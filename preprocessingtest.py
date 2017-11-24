@@ -1,5 +1,5 @@
 from preprocessing import preprocessing_factory
-from preprocessing import inception_preprocessing1
+from preprocessing import cmu_paf_preprocessing
 import json
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -7,7 +7,7 @@ import numpy as np
 
 #preprocess = preprocessing_factory.get_preprocessing('my_pre',is_training=True)
 DATA_PATH = '/media/xiaoyu/Document/data/'
-DATA_PATH = '/home/Document/data/'
+DATA_PATH = '/home/Documents/data/'
 
 image_shape = [368,368]
 image_file = tf.placeholder(tf.string)
@@ -16,7 +16,7 @@ img_input = tf.image.decode_jpeg(image_file,3)
 in_keypoints = tf.placeholder(tf.float32)
 in_humans = tf.placeholder(tf.float32)
 #image_pre = preprocess(img_input, image_shape[0], image_shape[1])
-bbox, image_pre, gaussian_maps, vec_maps = inception_preprocessing1.preprocess_for_train2(img_input, image_shape[0], image_shape[1], in_humans, in_keypoints, None)
+image_pre, gaussian_maps, vec_maps = cmu_paf_preprocessing.preprocess_for_train2(img_input, image_shape[0], image_shape[1], in_humans, in_keypoints, None)
 image_4d = tf.expand_dims(image_pre, 0)
 isess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True)))
 
@@ -25,7 +25,7 @@ isess.run(tf.global_variables_initializer())
 f = open(DATA_PATH+'/ai_challenger_keypoint_train_20170909/keypoint_train_annotations_20170909.json','r')
 s = json.load(f)
 
-for item in s[79:]:
+for item in s:
     imgpath = DATA_PATH+'/ai_challenger_keypoint_train_20170909/keypoint_train_images_20170902/'+item['image_id']+'.jpg'
     humans = []
     tl=list(item['human_annotations'].items())
@@ -43,10 +43,10 @@ for item in s[79:]:
     k = np.asarray(keypoints)
     h = np.asarray(humans)
     imgstring = tf.gfile.FastGFile(imgpath,'rb').read()
-    boxs, show_image, show_gaussian, show_vec = isess.run([bbox, image_pre, gaussian_maps, vec_maps],
+    show_image, show_gaussian, show_vec = isess.run([ image_pre, gaussian_maps, vec_maps],
                                                             feed_dict={image_file:imgstring, in_humans:h, in_keypoints:k})
     #image = ((image/2+0.5))
-    print(boxs)
+ 
 
     ttt = np.zeros(show_vec[0][:,:,0].shape)
     for i in range(14):

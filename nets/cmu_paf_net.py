@@ -109,21 +109,23 @@ my_seg_net4.my_seg_net1_arg_scope = my_arg_scpoe
 
 def stage1_block(net, num_p, branch):
     net = slim.conv2d(net, 128, [3, 3], scope="conv1_stage%d_L%d" % (1, branch))
-    net = slim.conv2d(net, 128, [3, 3], scope="conv1_stage%d_L%d" % (1, branch))
-    net = slim.conv2d(net, 128, [3, 3], scope="conv1_stage%d_L%d" % (1, branch))
-    net = slim.conv2d(net, 512, [1, 1], scope="conv1_stage%d_L%d" % (1, branch))
-    net = slim.conv2d(net, num_p, [1, 1], scope="conv1_stage%d_L%d" % (1, branch))
+    net = slim.conv2d(net, 128, [3, 3], scope="conv2_stage%d_L%d" % (1, branch))
+    net = slim.conv2d(net, 128, [3, 3], scope="conv3_stage%d_L%d" % (1, branch))
+    net = slim.conv2d(net, 512, [1, 1], scope="conv4_stage%d_L%d" % (1, branch))
+    net = slim.conv2d(net, num_p, [1, 1], scope="conv5_stage%d_L%d" % (1, branch))
+    return net
 
 def stageT_block(net, num_p, stage, branch):
     net = slim.conv2d(net, 128, [7, 7], scope="conv1_stage%d_L%d" % (stage, branch))
-    net = slim.conv2d(net, 128, [7, 7], scope="conv1_stage%d_L%d" % (stage, branch))
-    net = slim.conv2d(net, 128, [7, 7], scope="conv1_stage%d_L%d" % (stage, branch))
-    net = slim.conv2d(net, 128, [7, 7], scope="conv1_stage%d_L%d" % (stage, branch))
-    net = slim.conv2d(net, 128, [7, 7], scope="conv1_stage%d_L%d" % (stage, branch))
-    net = slim.conv2d(net, 512, [1, 1], scope="conv1_stage%d_L%d" % (stage, branch))
-    net = slim.conv2d(net, num_p, [1, 1], scope="conv1_stage%d_L%d" % (stage, branch))
+    net = slim.conv2d(net, 128, [7, 7], scope="conv2_stage%d_L%d" % (stage, branch))
+    net = slim.conv2d(net, 128, [7, 7], scope="conv3_stage%d_L%d" % (stage, branch))
+    net = slim.conv2d(net, 128, [7, 7], scope="conv4_stage%d_L%d" % (stage, branch))
+    net = slim.conv2d(net, 128, [7, 7], scope="conv5_stage%d_L%d" % (stage, branch))
+    net = slim.conv2d(net, 512, [1, 1], scope="conv6_stage%d_L%d" % (stage, branch))
+    net = slim.conv2d(net, num_p, [1, 1], scope="conv7_stage%d_L%d" % (stage, branch))
+    return net
 
-def paf_net(inputs,):
+def paf_net(inputs, is_training = True, scope = None):
     net, end_points = inception_v4.inception_v4_base(inputs)
     net = end_points['Mixed_5e']
     gaussian_out = []
@@ -135,8 +137,8 @@ def paf_net(inputs,):
         gaussian_out.append(stage1_branch1_out)
         vec_out.append(stage1_branch2_out)
         for sn in range(2, 7):
-            stageT_branch1_out = stageT_block(net, 14, sn)
-            stageT_branch2_out = stageT_block(net, 28, sn)
+            stageT_branch1_out = stageT_block(net, 14, sn, 1)
+            stageT_branch2_out = stageT_block(net, 28, sn, 2)
             net = tf.concat([net, stageT_branch1_out, stageT_branch2_out], axis = -1)
             gaussian_out.append(stageT_branch1_out)
             vec_out.append(stageT_branch2_out)
@@ -149,7 +151,7 @@ paf_net.arg_scope = my_arg_scpoe
 def cal_loss(gaussian_out, vec_out, gaussian_label, vec_label):
     def eula_loss(x, y, stage, branch):
         name = "stage%d_L%d" % (stage, branch)
-        with tf.variable_scope(scope, name):
+        with tf.variable_scope(name):
           return tf.reduce_sum((x-y)*(x-y) / 2)
     loss = 0
     for i in range(1, 7):
@@ -158,7 +160,5 @@ def cal_loss(gaussian_out, vec_out, gaussian_label, vec_label):
     
 
     tf.losses.add_loss(loss)
-    with tf.variable_scope(scope, 'total'):
-        tf.add_to_collection('LOSSES', loss)
     return loss
     

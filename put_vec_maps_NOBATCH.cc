@@ -19,7 +19,7 @@ REGISTER_OP("PutVecMaps")
       ::tensorflow::shape_inference::ShapeHandle input;
       ::tensorflow::shape_inference::ShapeHandle output;
       
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 4, &input));
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 3, &input));
       TF_RETURN_IF_ERROR(c->ReplaceDim(input, -1,  c->MakeDim(::tensorflow::shape_inference::DimensionOrConstant(28)) , &output));
 
       c->set_output(0, output);
@@ -38,44 +38,44 @@ class PutVecMapsOp : public OpKernel {
     const Tensor& keypoints = context->input(1);
     const Tensor& areafactors = context->input(2);
 
-    OP_REQUIRES(context, images.dims() == 4,
-                errors::InvalidArgument("The rank of the images should be 4"));
+    OP_REQUIRES(context, images.dims() == 3,
+                errors::InvalidArgument("The rank of the images should be 3"));
     OP_REQUIRES(
-        context, keypoints.dims() == 4,
-        errors::InvalidArgument("The rank of the keypoints tensor should be 4"));
+        context, keypoints.dims() == 3,
+        errors::InvalidArgument("The rank of the keypoints tensor should be 3"));
     OP_REQUIRES(
-        context, areafactors.dims() == 3,
-        errors::InvalidArgument("The rank of the areafactors tensor should be 3"));
-    OP_REQUIRES(context, images.dim_size(0) == keypoints.dim_size(0),
-                errors::InvalidArgument("The batch sizes should be the same"));
-    OP_REQUIRES(context, areafactors.dim_size(0) == keypoints.dim_size(0),
-                errors::InvalidArgument("The batch sizes should be the same"));
-    OP_REQUIRES(context, areafactors.dim_size(1) == keypoints.dim_size(1),
-                errors::InvalidArgument("The human number should be the same"));
+        context, areafactors.dims() == 2,
+        errors::InvalidArgument("The rank of the areafactors tensor should be 2"));
+    // OP_REQUIRES(context, images.dim_size(0) == keypoints.dim_size(0),
+    //             errors::InvalidArgument("The batch sizes should be the same"));
+    // OP_REQUIRES(context, areafactors.dim_size(0) == keypoints.dim_size(0),
+    //             errors::InvalidArgument("The batch sizes should be the same"));
+    // OP_REQUIRES(context, areafactors.dim_size(1) == keypoints.dim_size(1),
+    //             errors::InvalidArgument("The human number should be the same"));
 
 
-    const int64 batch_size = images.dim_size(0);
-    const int64 height = images.dim_size(1);
-    const int64 width = images.dim_size(2);
+    // const int64 batch_size = images.dim_size(0);
+    const int64 height = images.dim_size(0);
+    const int64 width = images.dim_size(1);
     const int64 depth = 28;
 
     Tensor* output;
     OP_REQUIRES_OK(
         context,
         context->allocate_output(
-            0, TensorShape({batch_size, height, width, depth}), &output));
+            0, TensorShape({height, width, depth}), &output));
 
-    auto canvas = output->tensor<float, 4>();
-    const auto tpoints = keypoints.tensor<float, 4>();
-    const auto factors = areafactors.tensor<float, 3>();
+    auto canvas = output->tensor<float, 3>();
+    const auto tpoints = keypoints.tensor<float, 3>();
+    const auto factors = areafactors.tensor<float, 2>();
     const int mid_1[14] = {12, 13, 0, 1, 13, 3, 4, 0, 6, 7, 3, 9, 10, 6};
     const int mid_2[14] = {13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 9};
 
-    for(int64 b = 0; b < batch_size; ++b){
+  //  for(int64 b = 0; b < batch_size; ++b){
       std::vector<float> thre_v;
-      const int64 num_human = keypoints.dim_size(1);
+      const int64 num_human = keypoints.dim_size(0);
       for(int64 h = 0; h < num_human; ++h){
-          float temp = static_cast<float>(factors(b, h, 0));
+          float temp = static_cast<float>(factors( h, 0));
           if(temp>1)
             thre_v.push_back(16.0);
           else if(temp<=0.5)
@@ -89,17 +89,17 @@ class PutVecMapsOp : public OpKernel {
         for(int64 h = 0; h < num_human; ++h){
           const int64 pa = mid_1[p];
           const int64 pb = mid_2[p];
-          const float visible_a = static_cast<float>(tpoints(b, h, pa, 2));
-          const float visible_b = static_cast<float>(tpoints(b, h, pb, 2));
+          const float visible_a = static_cast<float>(tpoints(h, pa, 2));
+          const float visible_b = static_cast<float>(tpoints(h, pb, 2));
           if (visible_a != 1.0)
             continue;
           if (visible_b != 1.0)
             continue;
 
-          const int64 prow_a = static_cast<float>(tpoints(b, h, pa, 1)) * (height - 1);
-          const int64 pcol_a = static_cast<float>(tpoints(b, h, pa, 0)) * (width - 1);
-          const int64 prow_b = static_cast<float>(tpoints(b, h, pb, 1)) * (height - 1);
-          const int64 pcol_b = static_cast<float>(tpoints(b, h, pb, 0)) * (width - 1);
+          const int64 prow_a = static_cast<float>(tpoints(h, pa, 1)) * (height - 1);
+          const int64 pcol_a = static_cast<float>(tpoints(h, pa, 0)) * (width - 1);
+          const int64 prow_b = static_cast<float>(tpoints(h, pb, 1)) * (height - 1);
+          const int64 pcol_b = static_cast<float>(tpoints(h, pb, 0)) * (width - 1);
           float thre = thre_v[h];
 
           if (prow_a >= height || prow_a < 0 ||
@@ -147,12 +147,12 @@ class PutVecMapsOp : public OpKernel {
               if(dist < thre){
                 float t_count = p_count[i][j];
                 if(t_count == 0){
-                    canvas(b, i, j, p * 2) = col_factor;// v_col;
-                    canvas(b, i, j, p * 2 + 1) = row_factor;//v_row;
+                    canvas(i, j, p * 2) = col_factor;// v_col;
+                    canvas(i, j, p * 2 + 1) = row_factor;//v_row;
                 }
                 else{
-                    canvas(b, i, j, p * 2) = (canvas(b, i, j, p * 2) + col_factor) / (t_count + 1);
-                    canvas(b, i, j, p * 2 + 1) = (canvas(b, i, j, p * 2 + 1) + row_factor) / (t_count + 1);
+                    canvas(i, j, p * 2) = (canvas(i, j, p * 2) + col_factor) / (t_count + 1);
+                    canvas(i, j, p * 2 + 1) = (canvas(i, j, p * 2 + 1) + row_factor) / (t_count + 1);
                     p_count[i][j] = t_count + 1;
                 }
 
@@ -163,7 +163,7 @@ class PutVecMapsOp : public OpKernel {
 
         }
       }
-    }
+    // }
   }
 };
 

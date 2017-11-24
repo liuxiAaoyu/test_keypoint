@@ -259,12 +259,14 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
 
     
     put_gaussian_maps_module = tf.load_op_library('./put_gaussian_maps.so')
-    gaussion_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
-    gaussion_maps = tf.squeeze(gaussion_maps,0)
+    #gaussion_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
+    #gaussion_maps = tf.squeeze(gaussion_maps,0)
+    gaussion_maps = put_gaussian_maps_module.put_gaussian_maps(distorted_image, tk_clamp)
 
     put_vec_maps_module = tf.load_op_library('./put_vec_maps.so')
-    vec_maps = put_vec_maps_module.put_vec_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0), tf.expand_dims(area_factor, 0))
-    vec_maps = tf.squeeze(vec_maps,0)
+    #vec_maps = put_vec_maps_module.put_vec_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0), tf.expand_dims(area_factor, 0))
+    #vec_maps = tf.squeeze(vec_maps,0)
+    vec_maps = put_vec_maps_module.put_vec_maps( distorted_image, tk_clamp, area_factor)
     # This resizing operation may distort the images because the aspect
     # ratio is not respected. We select a resize method in a round robin
     # fashion based on the thread number.
@@ -277,8 +279,8 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
         lambda x, method: tf.image.resize_images(x, [height, width], method),
         num_cases=num_resize_cases)
 
-    gaussion_maps = tf.image.resize_images(gaussion_maps, [height, width], 2)
-    vec_maps = tf.image.resize_images(vec_maps, [height, width], 2)
+    #gaussion_maps = tf.image.resize_images(gaussion_maps, [35, 35], 1)
+    #vec_maps = tf.image.resize_images(vec_maps, [35, 35], 1)
 
     if add_image_summaries:
       tf.summary.image('cropped_resized_image',

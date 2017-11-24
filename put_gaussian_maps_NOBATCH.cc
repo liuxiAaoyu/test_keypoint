@@ -18,7 +18,7 @@ REGISTER_OP("PutGaussianMaps")
       ::tensorflow::shape_inference::ShapeHandle input;
       ::tensorflow::shape_inference::ShapeHandle output;
       
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 4, &input));
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 3, &input));
       TF_RETURN_IF_ERROR(c->ReplaceDim(input, -1,  c->MakeDim(::tensorflow::shape_inference::DimensionOrConstant(14)) , &output));
 
       c->set_output(0, output);
@@ -36,41 +36,41 @@ class PutGaussianMapsOp : public OpKernel {
     const Tensor& images = context->input(0);
     const Tensor& keypoints = context->input(1);
 
-    OP_REQUIRES(context, images.dims() == 4,
-                errors::InvalidArgument("The rank of the images should be 4"));
+    OP_REQUIRES(context, images.dims() == 3,
+                errors::InvalidArgument("The rank of the images should be 3"));
     OP_REQUIRES(
-        context, keypoints.dims() == 4,
-        errors::InvalidArgument("The rank of the keypoints tensor should be 4"));
-    OP_REQUIRES(context, images.dim_size(0) == keypoints.dim_size(0),
-                errors::InvalidArgument("The batch sizes should be the same"));
+        context, keypoints.dims() == 3,
+        errors::InvalidArgument("The rank of the keypoints tensor should be 3"));
+    // OP_REQUIRES(context, images.dim_size(0) == keypoints.dim_size(0),
+    //             errors::InvalidArgument("The batch sizes should be the same"));
 
 
-    const int64 batch_size = images.dim_size(0);
-    const int64 height = images.dim_size(1);
-    const int64 width = images.dim_size(2);
+    //const int64 batch_size = images.dim_size(0);
+    const int64 height = images.dim_size(0);
+    const int64 width = images.dim_size(1);
     const int64 depth = 14;
 
     Tensor* output;
     OP_REQUIRES_OK(
         context,
         context->allocate_output(
-            0, TensorShape({batch_size, height, width, depth}), &output));
+            0, TensorShape({height, width, depth}), &output));
 
-    auto canvas = output->tensor<float, 4>();
+    auto canvas = output->tensor<float, 3>();
 
-    for(int64 b = 0; b < batch_size; ++b){
-      const int64 num_points = keypoints.dim_size(2);
+    // for(int64 b = 0; b < batch_size; ++b){
+      const int64 num_points = keypoints.dim_size(1);
       for(int64 p = 0; p < num_points; ++p){
-        const int64 num_human = keypoints.dim_size(1);
-        const auto tpoints = keypoints.tensor<float, 4>();
+        const int64 num_human = keypoints.dim_size(2);
+        const auto tpoints = keypoints.tensor<float, 3>();
         for(int64 h = 0; h < num_human; ++h){
 
-          const int64 visible = static_cast<int64>(tpoints(b, h, p, 2));
+          const int64 visible = static_cast<int64>(tpoints(h, p, 2));
           if (visible != 1)
             continue;
 
-          const int64 prow = static_cast<float>(tpoints(b, h, p, 1)) * (height - 1);
-          const int64 pcol = static_cast<float>(tpoints(b, h, p, 0)) * (width - 1);
+          const int64 prow = static_cast<float>(tpoints(h, p, 1)) * (height - 1);
+          const int64 pcol = static_cast<float>(tpoints(h, p, 0)) * (width - 1);
           float sigma = 17.0;
                               
           if (prow >= height || prow < 0 ||
@@ -93,16 +93,16 @@ class PutGaussianMapsOp : public OpKernel {
               float exponent = dist / 2.0 / sigma / sigma;
               if(exponent > 4.6052) //ln(100) = -ln(1%)
                 continue;
-              canvas(b, i, j, p) += exp(-exponent);
-              if(canvas(b, i, j, p) > 1)
-                canvas(b, i, j, p) = 1;
+              canvas(i, j, p) += exp(-exponent);
+              if(canvas(i, j, p) > 1)
+                canvas(i, j, p) = 1;
             }
           }
         
 
         }
       }
-    }
+    // }
   }
 };
 

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 slim = tf.contrib.slim
 reader = tf.TFRecordReader()  
-filename_queue = tf.train.string_input_producer(['/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/train.tfrecord'])  
+filename_queue = tf.train.string_input_producer(['/home/xiaoyu/Documents/data/CHAIkp_train.tfrecord'])  
 _, serialized_example = reader.read(filename_queue)  
 features = tf.parse_single_example(serialized_example, features={  
         'image/encoded': tf.FixedLenFeature((), tf.string),
@@ -48,16 +48,18 @@ decoder = slim.tfexample_decoder.TFExampleDecoder(keys_to_features,
 # decoder =  slim.tfexample_decoder.Tensor('xx')
 #xx = decoder2.tensors_to_item(features)
 
+
+
 with tf.Session() as sess:  
     sess.run(tf.global_variables_initializer())  
     coord = tf.train.Coordinator()  
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-    for i in range(5):
-        a,b = sess.run([tf_humans, tf_keypoints])
+    for i in range(1000):
+        a,b,c = sess.run([tf_image, tf_humans, tf_keypoints])
         print(a.shape)
-        print(a)
+        print(c)
         print(b)
-        #plt.imshow(a)
-        #plt.show()
+        plt.imshow(a)
+        plt.show()
     coord.request_stop()
 coord.join(threads) 

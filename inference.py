@@ -4,9 +4,11 @@ from nets import nets_factory
 import json
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 import math
+import cv2
 
 #preprocess = preprocessing_factory.get_preprocessing('my_pre',is_training=True)
 DATA_PATH = '/media/xiaoyu/Document/data/'
@@ -34,17 +36,17 @@ vec_out = tf.squeeze(vec_out, [0])
 isess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True)))
 
 isess.run(tf.global_variables_initializer())
-ckpt_filename = '/home/xiaoyu/Documents/AI_keypoint/log/model.ckpt-70378'
+ckpt_filename = '/home/xiaoyu/Documents/test_keypoint/log/model.ckpt-24016'
 isess.run(tf.global_variables_initializer())
 saver = tf.train.Saver()
 saver.restore(isess, ckpt_filename)
 
 
-f = open('/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_annotations_20170911 (copy).json','r')
+f = open('/media/xiaoyu/Document/data/ai_challenger_keypoint_train_20170909/keypoint_train_annotations_20170909.json','r')
 s = json.load(f)
 
 for item in s:
-    imgpath = '/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_images_20170911/'+item['image_id']+'.jpg'
+    imgpath = '/media/xiaoyu/Document/data/ai_challenger_keypoint_train_20170909/keypoint_train_images_20170902/'+item['image_id']+'.jpg'
     humans = []
     tl=list(item['human_annotations'].items())
     tl.sort()
@@ -89,7 +91,7 @@ for item in s:
 
 
 
-
+    oriImg = show_image
     all_peaks = []
     peak_counter = 0
 
@@ -154,7 +156,7 @@ for item in s:
 
                     score_midpts = np.multiply(vec_x, vec[0]) + np.multiply(vec_y, vec[1])
                     score_with_dist_prior = sum(score_midpts)/len(score_midpts) + min(0.5*oriImg.shape[0]/norm-1, 0)
-                    criterion1 = len(np.nonzero(score_midpts > param['thre2'])[0]) > 0.8 * len(score_midpts)
+                    criterion1 = len(np.nonzero(score_midpts > 0.05 )[0]) > 0.8 * len(score_midpts)
                     criterion2 = score_with_dist_prior > 0
                     if criterion1 and criterion2:
                         connection_candidate.append([i, j, score_with_dist_prior, score_with_dist_prior+candA[i][2]+candB[j][2]])
@@ -183,7 +185,7 @@ for item in s:
         if k not in special_k:
             partAs = connection_all[k][:,0]
             partBs = connection_all[k][:,1]
-            indexA, indexB = np.array(limbSeq[k]) - 1
+            indexA, indexB = np.array(limbSeq[k])
 
             for i in range(len(connection_all[k])): #= 1:size(temp,1)
                 found = 0
@@ -238,9 +240,9 @@ for item in s:
             [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
     cmap = matplotlib.cm.get_cmap('hsv')
 
-    canvas = cv2.imread(test_image) # B,G,R order
-
-    for i in range(18):
+    #canvas = cv2.imread(test_image) # B,G,R order
+    canvas = oriImg
+    for i in range(14):
         rgba = np.array(cmap(1 - i/18. - 1./36))
         rgba[0:3] *= 255
         for j in range(len(all_peaks[i])):
@@ -248,5 +250,27 @@ for item in s:
 
     to_plot = cv2.addWeighted(oriImg, 0.3, canvas, 0.7, 0)
     plt.imshow(to_plot[:,:,[2,1,0]])
-    fig = matplotlib.pyplot.gcf()
-    fig.set_size_inches(12, 12)
+    plt.show()
+
+
+    # visualize 2
+    stickwidth = 4
+
+    for i in range(14):
+        for n in range(len(subset)):
+            index = subset[n][np.array(limbSeq[i])]
+            if -1 in index:
+                continue
+            cur_canvas = canvas.copy()
+            Y = candidate[index.astype(int), 0]
+            X = candidate[index.astype(int), 1]
+            mX = np.mean(X)
+            mY = np.mean(Y)
+            length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
+            angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
+            polygon = cv2.ellipse2Poly((int(mY),int(mX)), (int(length/2), stickwidth), int(angle), 0, 360, 1)
+            cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
+            canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
+            
+    plt.imshow(canvas[:,:,[2,1,0]])
+    plt.show()

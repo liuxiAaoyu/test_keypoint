@@ -9,6 +9,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 import math
 import cv2
+import os
 
 #preprocess = preprocessing_factory.get_preprocessing('my_pre',is_training=True)
 DATA_PATH = '/media/xiaoyu/Document/data/'
@@ -20,6 +21,8 @@ image_shape = [299,299]
 image_file = tf.placeholder(tf.string)
 #img_input = tf.placeholder(tf.uint8, shape=(None, None, 3))
 img_input = tf.image.decode_jpeg(image_file,3)
+hh = tf.shape(img_input)[0]
+ww = tf.shape(img_input)[1]
 in_keypoints = tf.placeholder(tf.float32)
 in_humans = tf.placeholder(tf.float32)
 #image_pre = preprocess(img_input, image_shape[0], image_shape[1])
@@ -28,25 +31,26 @@ image_4d = tf.expand_dims(image_pre, 0)
 
 network_fn = nets_factory.get_network('cmu_paf_net', is_training=False)
 gaussian_out, vec_out= network_fn(image_4d)
-gaussian_out = tf.image.resize_bilinear(gaussian_out[5], [image_shape[0], image_shape[1]],align_corners=False)
+gaussian_out = tf.image.resize_bilinear(gaussian_out[5], [hh, ww],align_corners=False)
 gaussian_out = tf.squeeze(gaussian_out, [0])
-vec_out = tf.image.resize_bilinear(vec_out[5], [image_shape[0], image_shape[1]],align_corners=False)
+vec_out = tf.image.resize_bilinear(vec_out[5], [hh, ww],align_corners=False)
 vec_out = tf.squeeze(vec_out, [0])
 
 isess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True)))
 
 isess.run(tf.global_variables_initializer())
-ckpt_filename = '/home/xiaoyu/Documents/test_keypoint/log/model.ckpt-24016'
+ckpt_filename = '/home/xiaoyu/Documents/AI_keypoint/log/model.ckpt-86920'
 isess.run(tf.global_variables_initializer())
 saver = tf.train.Saver()
 saver.restore(isess, ckpt_filename)
 
 
-f = open('/media/xiaoyu/Document/data/ai_challenger_keypoint_train_20170909/keypoint_train_annotations_20170909.json','r')
+f = open('/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_annotations_20170911 (copy).json','r')
 s = json.load(f)
-
-for item in s:
-    imgpath = '/media/xiaoyu/Document/data/ai_challenger_keypoint_train_20170909/keypoint_train_images_20170902/'+item['image_id']+'.jpg'
+result = []
+count=0
+for item in s[213:]:
+    imgpath = '/home/xiaoyu/Documents/data/ai_challenger_keypoint_validation_20170911/keypoint_validation_images_20170911/'+item['image_id']+'.jpg'
     humans = []
     tl=list(item['human_annotations'].items())
     tl.sort()
@@ -64,30 +68,39 @@ for item in s:
     h = np.asarray(humans)
     imgstring = tf.gfile.FastGFile(imgpath,'rb').read()
 
+    multiplier = [0.5, 1, 1.5, 2]
+    heatmaps = []#np.zeros((hh, ww, 14))
+    pafs = []#np.zeros((hh, ww, 28))
+    for mutiply in multiplier:
+        image_pre = cmu_paf_preprocessing.preprocess_for_eval(img_input, int(image_shape[0]*mutiply), int(image_shape[1]*mutiply))
+        show_image, show_gaussian, show_vec = isess.run([ img_input, gaussian_out, vec_out],
+                                                                feed_dict={image_file:imgstring})
+        # #show_image = ((show_image/2+0.5))
+        # show_image = show_image/255
 
-    show_image, show_gaussian, show_vec = isess.run([ image_pre, gaussian_out, vec_out],
-                                                            feed_dict={image_file:imgstring})
-    show_image = ((show_image/2+0.5))
- 
+        # ttt = np.zeros(show_vec[:,:,0].shape)
+        # for i in range(14):
+        #     ttt = ttt + show_vec[:,:,i*2]
+        # plt.imshow(show_image)
+        # plt.imshow(ttt,alpha = .6)
+        # plt.show()
 
-    ttt = np.zeros(show_vec[:,:,0].shape)
-    for i in range(14):
-        ttt = ttt + show_vec[:,:,i*2]
-    plt.imshow(show_image)
-    plt.imshow(ttt,alpha = .6)
-    plt.show()
+        # ttt = np.zeros(show_gaussian[:,:,0].shape)
+        # for i in range(14):
+        #     ttt = ttt + show_gaussian[:,:,i]
+        # plt.imshow(show_image)
+        # plt.imshow(ttt,alpha = .6)
+        # plt.show()
 
-    ttt = np.zeros(show_gaussian[:,:,0].shape)
-    for i in range(14):
-        ttt = ttt + show_gaussian[:,:,i]
-    plt.imshow(show_image)
-    plt.imshow(ttt,alpha = .6)
-    plt.show()
+        # plt.imshow(ttt)
+        # plt.show()
 
-    plt.imshow(ttt)
-    plt.show()
-
-
+        heatmaps.append(show_gaussian / len(multiplier))
+        pafs.append(show_vec / len(multiplier))
+    
+    heatmaps_avg = heatmaps[0] + heatmaps[1] + heatmaps[2] + heatmaps[3]; 
+    pafs_avg = pafs[0] + pafs[1] + pafs[2] + pafs[3]; 
+    
 
 
 
@@ -96,7 +109,7 @@ for item in s:
     peak_counter = 0
 
     for part in range(14):
-        map_ori = show_gaussian[:,:,part]
+        map_ori = heatmaps_avg[:,:,part]
         map = gaussian_filter(map_ori, sigma=3)
         
         map_left = np.zeros(map.shape)
@@ -132,7 +145,7 @@ for item in s:
     mid_num = 10
 
     for k in range(len(mapIdx)):
-        score_mid = show_vec[:,:,[x for x in mapIdx[k]]]
+        score_mid = pafs_avg[:,:,[x for x in mapIdx[k]]]
         candA = all_peaks[limbSeq[k][0]]
         candB = all_peaks[limbSeq[k][1]]
         nA = len(candA)
@@ -155,7 +168,9 @@ for item in s:
                                     for I in range(len(startend))])
 
                     score_midpts = np.multiply(vec_x, vec[0]) + np.multiply(vec_y, vec[1])
-                    score_with_dist_prior = sum(score_midpts)/len(score_midpts) + min(0.5*oriImg.shape[0]/norm-1, 0)
+                    
+                    score_with_dist_prior = sum(score_midpts)/len(score_midpts) + min(np.divide(0.5*oriImg.shape[0],norm)-1, 0)
+
                     criterion1 = len(np.nonzero(score_midpts > 0.05 )[0]) > 0.8 * len(score_midpts)
                     criterion2 = score_with_dist_prior > 0
                     if criterion1 and criterion2:
@@ -203,7 +218,7 @@ for item in s:
                         subset[j][-2] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
                 elif found == 2: # if found 2 and disjoint, merge them
                     j1, j2 = subset_idx
-                    print ("found = 2")
+                    #print ("found = 2")
                     membership = ((subset[j1]>=0).astype(int) + (subset[j2]>=0).astype(int))[:-2]
                     if len(np.nonzero(membership == 2)[0]) == 0: #merge
                         subset[j1][:-2] += (subset[j2][:-2] + 1)
@@ -234,43 +249,75 @@ for item in s:
 
 
 
-    # visualize
-    colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], \
-            [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], \
-            [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
-    cmap = matplotlib.cm.get_cmap('hsv')
+    # # visualize
+    # colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], \
+    #         [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], \
+    #         [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
+    # cmap = matplotlib.cm.get_cmap('hsv')
 
-    #canvas = cv2.imread(test_image) # B,G,R order
-    canvas = oriImg
-    for i in range(14):
-        rgba = np.array(cmap(1 - i/18. - 1./36))
-        rgba[0:3] *= 255
-        for j in range(len(all_peaks[i])):
-            cv2.circle(canvas, all_peaks[i][j][0:2], 4, colors[i], thickness=-1)
+    # #canvas = cv2.imread(test_image) # B,G,R order
+    # canvas = oriImg
+    # for i in range(14):
+    #     rgba = np.array(cmap(1 - i/18. - 1./36))
+    #     rgba[0:3] *= 255
+    #     for j in range(len(all_peaks[i])):
+    #         cv2.circle(canvas, all_peaks[i][j][0:2], 4, colors[i], thickness=-1)
 
-    to_plot = cv2.addWeighted(oriImg, 0.3, canvas, 0.7, 0)
-    plt.imshow(to_plot[:,:,[2,1,0]])
-    plt.show()
+    # to_plot = cv2.addWeighted(oriImg, 0.3, canvas, 0.7, 0)
+    # plt.imshow(to_plot[:,:,[2,1,0]])
+    # plt.show()
 
 
-    # visualize 2
-    stickwidth = 4
+    # # visualize 2
+    # stickwidth = 4
 
-    for i in range(14):
-        for n in range(len(subset)):
-            index = subset[n][np.array(limbSeq[i])]
-            if -1 in index:
-                continue
-            cur_canvas = canvas.copy()
-            Y = candidate[index.astype(int), 0]
-            X = candidate[index.astype(int), 1]
-            mX = np.mean(X)
-            mY = np.mean(Y)
-            length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
-            angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
-            polygon = cv2.ellipse2Poly((int(mY),int(mX)), (int(length/2), stickwidth), int(angle), 0, 360, 1)
-            cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
-            canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
+    # for n in range(len(subset)):
+    #     for i in range(14):
+        
+    #         index = subset[n][np.array(limbSeq[i])]
+    #         if -1 in index:
+    #             continue
+    #         cur_canvas = canvas.copy()
+    #         Y = candidate[index.astype(int), 0]
+    #         X = candidate[index.astype(int), 1]
+    #         mX = np.mean(X)
+    #         mY = np.mean(Y)
+    #         length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
+    #         angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
+    #         polygon = cv2.ellipse2Poly((int(mY),int(mX)), (int(length/2), stickwidth), int(angle), 0, 360, 1)
+    #         cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
+    #         canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
+    #     plt.imshow(canvas[:,:,[2,1,0]])
+    #     plt.show()
             
-    plt.imshow(canvas[:,:,[2,1,0]])
-    plt.show()
+
+    temp = {}
+    temp['image_id']= os.path.split(imgpath)[1]
+    temp['keypoint_annotations']={}
+    for n in range(len(subset)):
+        keyname = 'humans%d' % (n+1)
+        values = []
+        for i in subset[n][:14]:
+            if i == -1:
+                values.append(0)
+                values.append(0)
+                values.append(0)
+                continue
+            values.append(int(candidate[int(i)][0]))
+            values.append(int(candidate[int(i)][1]))
+            values.append(1)
+        temp['keypoint_annotations'][keyname] = values
+    result.append(temp)
+    count+=1
+    print(count)
+    # last = 0
+    # if count%10 == 0:
+    #     tempdum = result[last:count]
+    #     with open('./submit%d.json'%(count), 'w') as json_file:
+    #         json_file.write(json.dumps(tempdum))
+    if count%10 == 0:
+        with open('./submit.json', 'w') as json_file:
+            json_file.write(json.dumps(result))
+
+with open('./submit.json', 'w') as json_file:
+    json_file.write(json.dumps(result))

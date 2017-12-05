@@ -20,7 +20,7 @@ REGISTER_OP("PutVecMaps")
       ::tensorflow::shape_inference::ShapeHandle output;
       
       TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 3, &input));
-      TF_RETURN_IF_ERROR(c->ReplaceDim(input, -1,  c->MakeDim(::tensorflow::shape_inference::DimensionOrConstant(28)) , &output));
+      TF_RETURN_IF_ERROR(c->ReplaceDim(input, -1,  c->MakeDim(::tensorflow::shape_inference::DimensionOrConstant(30)) , &output));
 
       c->set_output(0, output);
       return Status::OK();
@@ -57,7 +57,7 @@ class PutVecMapsOp : public OpKernel {
     // const int64 batch_size = images.dim_size(0);
     const int64 height = images.dim_size(0);
     const int64 width = images.dim_size(1);
-    const int64 depth = 28;
+    const int64 depth = 30;
 
     Tensor* output;
     OP_REQUIRES_OK(
@@ -68,8 +68,14 @@ class PutVecMapsOp : public OpKernel {
     auto canvas = output->tensor<float, 3>();
     const auto tpoints = keypoints.tensor<float, 3>();
     const auto factors = areafactors.tensor<float, 2>();
-    const int mid_1[14] = {12, 13, 0, 1, 13, 3, 4, 0, 6, 7, 3, 9, 10, 6};
-    const int mid_2[14] = {13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 9};
+    const int mid_1[15] = {12, 13, 0, 1, 13, 3, 4, 0, 6, 7, 3, 9, 10, 6, 0};
+    const int mid_2[15] = {13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 9, 3};
+    for (int64 i = 0; i < height; ++i){
+      for (int64 j = 0; j < width;++j){
+        for(int64 p = 0; p < depth; ++p)
+          canvas(i, j, p) = 0;
+      }
+    }
 
   //  for(int64 b = 0; b < batch_size; ++b){
       std::vector<float> thre_v;
@@ -83,7 +89,7 @@ class PutVecMapsOp : public OpKernel {
           else
             thre_v.push_back(8.0+(temp-0.5)*8.0);
       }
-      for(int64 p = 0; p < 14; ++p){
+      for(int64 p = 0; p < 15; ++p){
         std::vector<std::vector<float>> p_count(height, std::vector<float> (width, 0)); 
         
         for(int64 h = 0; h < num_human; ++h){

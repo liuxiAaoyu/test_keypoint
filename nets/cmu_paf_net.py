@@ -148,6 +148,58 @@ paf_net.default_image_height =299#640#448#1280
 paf_net.default_image_width = 299#960#448#1920
 paf_net.arg_scope = my_arg_scpoe
 
+def stage1_block_2(net, num_p, branch):
+    net = slim.conv2d(net, 128, [3, 3], scope="conv1_stage%d_L%d" % (1, branch))
+    net = slim.conv2d(net, num_p, [1, 1], scope="conv2_stage%d_L%d" % (1, branch))
+    return net
+
+def stageT_block_2(net, num_p, stage, branch):
+    net = slim.conv2d(net, 128, [7, 7], scope="conv1_stage%d_L%d" % (stage, branch))
+    net = slim.conv2d(net, num_p, [1, 1], scope="conv2_stage%d_L%d" % (stage, branch))
+    return net
+
+
+def paf_fpn_net(inputs, is_training = True, scope = 'My', reuse = None):
+    #with tf.variable_scope(scope, 'My', [inputs], reuse=reuse) as scope:
+        net, end_points = inception_v4.inception_v4_base(inputs,final_endpoint='Mixed_5e')
+        # net, end_points = inception_v4.inception_v4_base(inputs)
+        # #net = end_points['Mixed_5e']
+        # layer4out = end_points['Mixed_4a']
+        # layer5out = end_points['Mixed_5e']
+        # layer6out = end_points['Mixed_6h']
+        # layer7out = end_points['Mixed_7d']
+        
+        # deconv7 = slim.conv2d_transpose(layer7out,1024,3,2,'VALID',scope='deconv7')
+        # add6 = tf.add(deconv7,layer6out,name='add6')
+        # deconv6 = slim.conv2d_transpose(add6,384,3,2,'VALID',scope='deconv6')
+        # add5 = tf.add(deconv6,layer5out,name='add5')
+        # deconv5 = slim.conv2d_transpose(add5,192,3,2,'VALID',scope='deconv5')
+        # add4 = tf.add(deconv5,layer4out,name='add4')
+
+
+        #net = layer5out
+
+        gaussian_out = []
+        vec_out = []
+        with tf.variable_scope('paf'):
+            stage1_branch1_out = stage1_block(net, 14, 1)
+            stage1_branch2_out = stage1_block(net, 30, 2)
+            net = tf.concat([net, stage1_branch1_out, stage1_branch2_out], axis = -1)
+            gaussian_out.append(stage1_branch1_out)
+            vec_out.append(stage1_branch2_out)
+            for sn in range(2, 7):
+                stageT_branch1_out = stageT_block(net, 14, sn, 1)
+                stageT_branch2_out = stageT_block(net, 30, sn, 2)
+                net = tf.concat([net, stageT_branch1_out, stageT_branch2_out], axis = -1)
+                gaussian_out.append(stageT_branch1_out)
+                vec_out.append(stageT_branch2_out)
+        return gaussian_out, vec_out
+paf_fpn_net.default_image_size = 299
+paf_fpn_net.default_image_height =299#640#448#1280
+paf_fpn_net.default_image_width = 299#960#448#1920
+paf_fpn_net.arg_scope = my_arg_scpoe
+
+
 def cal_loss(gaussian_out, vec_out, gaussian_label, vec_label):
     def eula_loss(x, y, stage, branch):
         name = "stage%d_L%d" % (stage, branch)

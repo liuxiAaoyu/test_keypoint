@@ -94,9 +94,11 @@ arg_scopes_map = {'alexnet_v2': alexnet.alexnet_v2_arg_scope,
                   'nasnet_mobile': nasnet.nasnet_mobile_arg_scope,
                   'nasnet_large': nasnet.nasnet_large_arg_scope,
                   'cmu_paf_net': cmu_paf_net.my_arg_scpoe,
+                  'cmu_paf_fpn_net': cmu_paf_net.my_arg_scpoe,
                  }
 
 networks_obj = {'cmu_paf_net': cmu_paf_net.paf_net,
+                'cmu_paf_fpn_net': cmu_paf_net.paf_fpn_net,
                 }
 
 

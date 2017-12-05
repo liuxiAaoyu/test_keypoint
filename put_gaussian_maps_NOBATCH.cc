@@ -57,12 +57,18 @@ class PutGaussianMapsOp : public OpKernel {
             0, TensorShape({height, width, depth}), &output));
 
     auto canvas = output->tensor<float, 3>();
+    const auto tpoints = keypoints.tensor<float, 3>();
+    const int64 num_points = keypoints.dim_size(1);
+    const int64 num_human = keypoints.dim_size(0);
 
+    for (int64 i = 0; i < height; ++i){
+      for (int64 j = 0; j < width;++j){
+        for(int64 p = 0; p < num_points; ++p)
+          canvas(i, j, p) = 0;
+      }
+    }
     // for(int64 b = 0; b < batch_size; ++b){
-      const int64 num_points = keypoints.dim_size(1);
       for(int64 p = 0; p < num_points; ++p){
-        const int64 num_human = keypoints.dim_size(2);
-        const auto tpoints = keypoints.tensor<float, 3>();
         for(int64 h = 0; h < num_human; ++h){
 
           const int64 visible = static_cast<int64>(tpoints(h, p, 2));
@@ -71,12 +77,12 @@ class PutGaussianMapsOp : public OpKernel {
 
           const int64 prow = static_cast<float>(tpoints(h, p, 1)) * (height - 1);
           const int64 pcol = static_cast<float>(tpoints(h, p, 0)) * (width - 1);
-          float sigma = 17.0;
+          float sigma = 13.0;
                               
           if (prow >= height || prow < 0 ||
               pcol >= width || pcol < 0) {
-            LOG(WARNING) << "Keypoints (" << prow
-                        << "," << pcol
+                LOG(WARNING) << "Keypoints (" << prow<<" "<<static_cast<float>(tpoints(h, p, 1))
+                            << "," << pcol<<" "<<static_cast<float>(tpoints(h, p, 0))
                         << ") is completely outside the image"
                         << " and will not be drawn.";
             continue;

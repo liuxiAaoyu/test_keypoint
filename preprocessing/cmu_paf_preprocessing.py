@@ -152,6 +152,9 @@ def distorted_bounding_box_crop(image,
     cropped_image = tf.slice(image, bbox_begin, bbox_size)
     return cropped_image, distort_bbox
 
+draw_keypoints_module = tf.load_op_library('./draw_keypoints.so')
+put_gaussian_maps_module = tf.load_op_library('./put_gaussian_maps.so')
+put_vec_maps_module = tf.load_op_library('./put_vec_maps.so')
 def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
                          fast_mode=True,
                          scope=None,
@@ -189,7 +192,7 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
                          shape=[1, 1, 4])
     hh = tf.shape(image)[0]
     ww = tf.shape(image)[1]
-    sh = tf.stack([hh-1, ww-1, hh-1, ww-1])
+    sh = tf.stack([hh, ww, hh, ww])
     sh = tf.cast(sh,dtype=tf.float32)
     th = hunmans/sh
 
@@ -204,7 +207,7 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
     mask = tf.greater(tk_last_full,tk_ones)
     tk_zeros = tf.zeros(tf.shape(tk))
     tk_1 = tf.where(mask,tk_zeros,tk)
-    sh = tf.stack([ww-1, hh-1, 1])
+    sh = tf.stack([ww, hh, 1])
     sh = tf.cast(sh,dtype=tf.float32)
     tk = tk_1/sh
 
@@ -250,20 +253,22 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
     tk_clamp = tk_clamp - box_v
     tk_clamp = tk_clamp / box_ref
 
-    draw_keypoints_module = tf.load_op_library('./draw_keypoints.so')
+    
     image_with_distorted_keypoints = draw_keypoints_module.draw_keypoints( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
+    if add_image_summaries:
+      tf.summary.image('cropped_image_with_keypoints',
+                       image_with_distorted_keypoints)
 
     humans_ymin, humans_xmin, humans_ymax, humans_xmax = tf.split(th, [1, 1, 1, 1], axis=1)
     area_human = (humans_ymax - humans_ymin)*(humans_xmax - humans_xmin)#tf.multiply(tf.subtract(humans_ymax, humans_ymin), tf.subtract(humans_xmax, humans_xmin))
     area_factor = area_human / ((distort_bbox[3] - distort_bbox[1]) * (distort_bbox[2] - distort_bbox[0]))
 
     
-    put_gaussian_maps_module = tf.load_op_library('./put_gaussian_maps.so')
     #gaussion_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
     #gaussion_maps = tf.squeeze(gaussion_maps,0)
     gaussion_maps = put_gaussian_maps_module.put_gaussian_maps(distorted_image, tk_clamp)
 
-    put_vec_maps_module = tf.load_op_library('./put_vec_maps.so')
+    
     #vec_maps = put_vec_maps_module.put_vec_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0), tf.expand_dims(area_factor, 0))
     #vec_maps = tf.squeeze(vec_maps,0)
     vec_maps = put_vec_maps_module.put_vec_maps( distorted_image, tk_clamp, area_factor)
@@ -279,12 +284,18 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
         lambda x, method: tf.image.resize_images(x, [height, width], method),
         num_cases=num_resize_cases)
 
-    #gaussion_maps = tf.image.resize_images(gaussion_maps, [35, 35], 1)
-    #vec_maps = tf.image.resize_images(vec_maps, [35, 35], 1)
+    gaussion_maps = tf.image.resize_images(gaussion_maps, [35, 35], 0)
+    vec_maps = tf.image.resize_images(vec_maps, [35, 35], 0)
 
     if add_image_summaries:
       tf.summary.image('cropped_resized_image',
-                       tf.expand_dims(distorted_image, 0))
+                       tf.expand_dims( distorted_image, 0))
+      tf.summary.image('cropped_resized_gaussian',
+                       tf.expand_dims(tf.expand_dims(tf.reduce_sum(gaussion_maps,2),2), 0))
+      tf.summary.image('cropped_resized_vec',
+                       tf.expand_dims(tf.expand_dims(tf.reduce_sum(vec_maps,2),2), 0))
+
+
 
     # Randomly flip the image horizontally.
     #distorted_image = tf.image.random_flip_left_right(distorted_image)
@@ -393,7 +404,7 @@ def preprocess_for_train(image, height, width, bbox,
 
 
 def preprocess_for_eval(image, height, width,
-                        central_fraction=0.875, scope=None):
+                        central_fraction=1.0, scope=None):
   """Prepare one image for evaluation.
 
   If height and width are specified it would output an image with that size by

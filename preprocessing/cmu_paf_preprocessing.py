@@ -98,9 +98,9 @@ def distort_color(image, color_ordering=0, fast_mode=True, scope=None):
 
 def distorted_bounding_box_crop(image,
                                 bbox,
-                                min_object_covered=0.6,
+                                min_object_covered=0.9,
                                 aspect_ratio_range=(0.75, 1.33),
-                                area_range=(0.65, 1.0),
+                                area_range=(0.95, 1.0),
                                 max_attempts=100,
                                 scope=None):
   """Generates cropped_image using a one of the bboxes randomly distorted.
@@ -264,9 +264,9 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
     area_factor = area_human / ((distort_bbox[3] - distort_bbox[1]) * (distort_bbox[2] - distort_bbox[0]))
 
     
-    #gaussion_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
-    #gaussion_maps = tf.squeeze(gaussion_maps,0)
-    gaussion_maps = put_gaussian_maps_module.put_gaussian_maps(distorted_image, tk_clamp)
+    #gaussian_maps = put_gaussian_maps_module.put_gaussian_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0))
+    #gaussian_maps = tf.squeeze(gaussian_maps,0)
+    gaussian_maps = put_gaussian_maps_module.put_gaussian_maps(distorted_image, tk_clamp)
 
     
     #vec_maps = put_vec_maps_module.put_vec_maps( tf.expand_dims(distorted_image, 0), tf.expand_dims(tk_clamp, 0), tf.expand_dims(area_factor, 0))
@@ -284,14 +284,14 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
         lambda x, method: tf.image.resize_images(x, [height, width], method),
         num_cases=num_resize_cases)
 
-    gaussion_maps = tf.image.resize_images(gaussion_maps, [35, 35], 0)
+    gaussian_maps = tf.image.resize_images(gaussian_maps, [35, 35], 0)
     vec_maps = tf.image.resize_images(vec_maps, [35, 35], 0)
 
     if add_image_summaries:
       tf.summary.image('cropped_resized_image',
                        tf.expand_dims( distorted_image, 0))
       tf.summary.image('cropped_resized_gaussian',
-                       tf.expand_dims(tf.expand_dims(tf.reduce_sum(gaussion_maps,2),2), 0))
+                       tf.expand_dims(tf.expand_dims(tf.reduce_sum(gaussian_maps,2),2), 0))
       tf.summary.image('cropped_resized_vec',
                        tf.expand_dims(tf.expand_dims(tf.reduce_sum(vec_maps,2),2), 0))
 
@@ -312,10 +312,10 @@ def preprocess_for_train2(image, height, width, hunmans, keypoints, bbox,
     distorted_image = tf.subtract(distorted_image, 0.5)
     distorted_image = tf.multiply(distorted_image, 2.0)
 
-    return distorted_image, gaussion_maps, vec_maps
+    return distorted_image, gaussian_maps, vec_maps
 
 
-def preprocess_for_train(image, height, width, bbox,
+def preprocess_for_train(image, height, width, hunmans, keypoints, bbox,
                          fast_mode=True,
                          scope=None,
                          add_image_summaries=True):
@@ -352,6 +352,34 @@ def preprocess_for_train(image, height, width, bbox,
                          shape=[1, 1, 4])
     if image.dtype != tf.float32:
       image = tf.image.convert_image_dtype(image, dtype=tf.float32)
+    
+    hh = tf.shape(image)[0]
+    ww = tf.shape(image)[1]
+    sh = tf.stack([hh, ww, hh, ww])
+    sh = tf.cast(sh,dtype=tf.float32)
+    th = hunmans/sh
+    humans_ymin, humans_xmin, humans_ymax, humans_xmax = tf.split(th, [1, 1, 1, 1], axis=1)
+    area_human = (humans_ymax - humans_ymin)*(humans_xmax - humans_xmin)
+
+    tk = keypoints
+    tk_last = tf.strided_slice(tk,[0,0,2],[9999,14,3],[1,1,3])
+    last_ones = tf.ones([3])
+    if 1:
+      tk_last_full = tk_last*last_ones
+    else:
+      tk_last_full = tk_last*last_ones*2
+    tk_ones = tf.ones(tf.shape(tk))
+    mask = tf.greater(tk_last_full,tk_ones)
+    tk_zeros = tf.zeros(tf.shape(tk))
+    tk_1 = tf.where(mask,tk_zeros,tk)
+    sh = tf.stack([ww, hh, 1])
+    sh = tf.cast(sh,dtype=tf.float32)
+    tk = tk_1/sh
+    
+    gaussian_maps = put_gaussian_maps_module.put_gaussian_maps(image, tk)
+    vec_maps = put_vec_maps_module.put_vec_maps( image, tk, area_human)
+
+    image_with_mask = tf.concat([image, gaussian_maps, vec_maps], axis=2)
     # Each bounding box has shape [1, num_boxes, box coords] and
     # the coordinates are ordered [ymin, xmin, ymax, xmax].
     image_with_box = tf.image.draw_bounding_boxes(tf.expand_dims(image, 0),
@@ -359,7 +387,9 @@ def preprocess_for_train(image, height, width, bbox,
     if add_image_summaries:
       tf.summary.image('image_with_bounding_boxes', image_with_box)
 
-    distorted_image, distorted_bbox = distorted_bounding_box_crop(image, bbox)
+    distorted_image_with_mask, distorted_bbox = distorted_bounding_box_crop(image_with_mask, bbox)
+
+    distorted_image, distorted_gaussian_maps, distorted_vec_maps  = tf.split(distorted_image_with_mask, [3, 14, 30], axis=2)
     # Restore the shape since the dynamic slice based upon the bbox_size loses
     # the third dimension.
     distorted_image.set_shape([None, None, 3])
@@ -376,17 +406,44 @@ def preprocess_for_train(image, height, width, bbox,
 
     # We select only 1 case for fast_mode bilinear.
     num_resize_cases = 1 if fast_mode else 4
-    distorted_image = apply_with_random_selector(
-        distorted_image,
+    distorted_image_with_mask = apply_with_random_selector(
+        distorted_image_with_mask,
         lambda x, method: tf.image.resize_images(x, [height, width], method),
         num_cases=num_resize_cases)
-
+    
+    distorted_image, distorted_gaussian_maps, distorted_vec_maps  = tf.split(distorted_image_with_mask, [3, 14, 30], axis=2)
     if add_image_summaries:
       tf.summary.image('cropped_resized_image',
                        tf.expand_dims(distorted_image, 0))
 
     # Randomly flip the image horizontally.
-    distorted_image = tf.image.random_flip_left_right(distorted_image)
+    #distorted_image = tf.image.random_flip_left_right(distorted_image)
+
+    uniform_random = tf.random_uniform([], 0, 1.0, seed=None)
+    mirror_cond = tf.less(uniform_random, .5)
+    def flip_left_right(image):
+      filpfactor = tf.constant([1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,  
+                        -1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,1,1,1,1],dtype=tf.float32)
+      image = tf.reverse(image*filpfactor, [1])
+      d_image, d_gaussian, d_vec  = tf.split(image, [3, 14, 30], axis=2)
+      l_arm, r_arm, l_leg, r_leg, hn  = tf.split(d_gaussian, [3, 3, 3, 3, 2], axis=2)
+      d_gaussian = tf.concat([ r_arm, l_arm, r_leg, l_leg, hn], axis=2)
+      image = tf.concat([d_image, d_gaussian, d_vec], axis=2)
+      return image
+    distorted_image_with_mask_flip = tf.cond(mirror_cond,
+                              lambda: flip_left_right(distorted_image_with_mask),
+                              lambda: distorted_image_with_mask)
+    distorted_image_with_mask_flip.set_shape(distorted_image_with_mask.get_shape())
+    distorted_image, distorted_gaussian_maps, distorted_vec_maps  = tf.split(distorted_image_with_mask_flip, [3, 14, 30], axis=2)
+
+    distorted_gaussian_maps = tf.image.resize_images(distorted_gaussian_maps, [35, 35], 0)
+    distorted_vec_maps = tf.image.resize_images(distorted_vec_maps, [35, 35], 0)
+    
+    if add_image_summaries:
+      tf.summary.image('cropped_resized_gaussian',
+                       tf.expand_dims(tf.expand_dims(tf.reduce_sum(distorted_gaussian_maps,2),2), 0))
+      tf.summary.image('cropped_resized_vec',
+                       tf.expand_dims(tf.expand_dims(tf.reduce_sum(distorted_vec_maps,2),2), 0))
 
     # Randomly distort the colors. There are 4 ways to do it.
     distorted_image = apply_with_random_selector(
@@ -399,7 +456,7 @@ def preprocess_for_train(image, height, width, bbox,
                        tf.expand_dims(distorted_image, 0))
     distorted_image = tf.subtract(distorted_image, 0.5)
     distorted_image = tf.multiply(distorted_image, 2.0)
-    return distorted_image
+    return distorted_image, distorted_gaussian_maps, distorted_vec_maps
 
 
 
@@ -475,7 +532,7 @@ def preprocess_image(image, height, width,
     ValueError: if user does not provide bounding box
   """
   if is_training:
-    return preprocess_for_train2(image, height, width, hunmans, keypoints, bbox, fast_mode,
+    return preprocess_for_train(image, height, width, hunmans, keypoints, bbox, fast_mode,
                                 add_image_summaries=add_image_summaries)
   else:
     return preprocess_for_eval(image, height, width)

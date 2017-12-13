@@ -98,9 +98,9 @@ def distort_color(image, color_ordering=0, fast_mode=True, scope=None):
 
 def distorted_bounding_box_crop(image,
                                 bbox,
-                                min_object_covered=0.9,
+                                min_object_covered=0.6,
                                 aspect_ratio_range=(0.75, 1.33),
-                                area_range=(0.95, 1.0),
+                                area_range=(0.65, 1.0),
                                 max_attempts=100,
                                 scope=None):
   """Generates cropped_image using a one of the bboxes randomly distorted.

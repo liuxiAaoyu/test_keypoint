@@ -35,7 +35,7 @@ tf.app.flags.DEFINE_integer(
     'batch_size', 8, 'The number of samples in each batch.')
 
 tf.app.flags.DEFINE_string(
-    'train_dir', './log*',#'./logInception_resnet/',
+    'train_dir', './log.mse',#'./logInception_resnet/',
     'Directory where checkpoints and event logs are written to.')
 
 tf.app.flags.DEFINE_string(
@@ -147,7 +147,7 @@ tf.app.flags.DEFINE_string(
     'Specifies how the learning rate is decayed. One of "fixed", "exponential",'
     ' or "polynomial"')
 
-tf.app.flags.DEFINE_float('learning_rate', 0.0001, 'Initial learning rate.')
+tf.app.flags.DEFINE_float('learning_rate', 0.00005, 'Initial learning rate.')
 
 tf.app.flags.DEFINE_float(
     'end_learning_rate', 0.0001,
@@ -323,10 +323,12 @@ def main(_):
               return tf.reduce_sum((x-y)*(x-y)) / 2 
         loss = 0
         for i in range(1, 7):
-            lossB1 = eula_loss(gaussian_out[i-1], gaussian_label, i, 1)
-            lossB2 = eula_loss(vec_out[i-1], vec_label, i, 2)
-            tf.losses.add_loss(lossB1)
-            tf.losses.add_loss(lossB2)
+            # lossB1 = eula_loss(gaussian_out[i-1], gaussian_label, i, 1)
+            # lossB2 = eula_loss(vec_out[i-1], vec_label, i, 2)
+            # tf.losses.add_loss(lossB1)
+            # tf.losses.add_loss(lossB2)
+            lossB1 = tf.losses.mean_squared_error(gaussian_label, gaussian_out[i-1],reduction=tf.losses.Reduction.SUM)
+            lossB2 = tf.losses.mean_squared_error(vec_label, vec_out[i-1],reduction=tf.losses.Reduction.SUM)
             loss +=  lossB1
             loss +=  lossB2
         return loss
@@ -336,7 +338,7 @@ def main(_):
 
     # Gather initial summaries.
     summaries = set(tf.get_collection(tf.GraphKeys.SUMMARIES))
-
+    
     clones = model_deploy.create_clones(deploy_config, clone_fn, [batch_queue])
     first_clone_scope = deploy_config.clone_scope(0)
     # Gather update_ops from the first clone. These contain, for example,

@@ -83,11 +83,11 @@ class PutVecMapsOp : public OpKernel {
       for(int64 h = 0; h < num_human; ++h){
           float temp = static_cast<float>(factors( h, 0));
           if(temp>1)
-            thre_v.push_back(16.0);
+            thre_v.push_back(24.0);
           else if(temp<=0.5)
-            thre_v.push_back(8.0);
+            thre_v.push_back(16.0);
           else
-            thre_v.push_back(8.0+(temp-0.5)*8.0);
+            thre_v.push_back(16.0+(temp-0.5)*8.0);
       }
       for(int64 p = 0; p < 15; ++p){
         std::vector<std::vector<float>> p_count(height, std::vector<float> (width, 0)); 
